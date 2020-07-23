@@ -16,23 +16,30 @@ class CPU:
 
         address = 0
 
-        # For now, we've just hardcoded a program:
+        # Make sure a program file has been provided
+        if len(sys.argv) != 2:
+            print("Please provide a valid program file (e.g. cpu.py print8.ls8)")
+            sys.exit(1)
 
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
-
-
-        # Loop through each instruction and store it in memory
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
+        # Load file and write contents to memory (self.ram)
+        program_file = sys.argv[1]
+        try:
+            with open(program_file) as f:
+                for line in f:
+                    try:
+                        line = line.split("#", 1)[0]
+                        line = int(line, 2)
+                        self.ram_write(address, line)
+                        address += 1
+                    
+                    # skip empty lines and lines without numbers
+                    except ValueError:
+                        pass
+        
+        # If file cannot be found
+        except FileNotFoundError:
+            print('File "{}" not found'.format(program_file))
+            sys.exit(1)
 
 
     def alu(self, op, reg_a, reg_b):
@@ -41,6 +48,10 @@ class CPU:
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
         #elif op == "SUB": etc
+
+        elif op == 'MUL':
+            return self.reg[reg_a] * self.reg[reg_b]
+
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -64,14 +75,42 @@ class CPU:
 
         print()
 
+
+    def ram_read(self, address):
+        return self.ram[address]
+
+    def ram_write(self, address, value):
+        self.ram[address] = value
+
+
+    def pc_increment(self, instruction):
+        """
+        Given an instruction, return the number PC must be incremented by 
+        after that instruction has been run
+        """
+        
+        # Use a mask with 
+        mask = 0b11000000
+        
+        # Remove irrelevant information with mask
+        operands = instruction & mask
+
+        # Shift bits to remove trailing 0's
+        operands = operands >> 6
+
+        # Add one to account for the instruction itself
+        return operands + 0b1
+
     def run(self):
         """Run the CPU."""
         # After loading a program, we want to run it.
         running = True
+        
         while running == True:
-
-            # LDI instruction
-            if self.ram_read(self.pc) == 0b10000010:
+            instruction = self.ram_read(self.pc)
+            
+            # LDI 
+            if instruction == 0b10000010:
                 """
                 LDI register immediate
                 Set the value of a register to an integer.
@@ -85,9 +124,11 @@ class CPU:
                 value = self.ram_read(self.pc + 2)
 
                 self.reg[register_num] = value
-                self.pc += 3
+                self.pc += self.pc_increment(instruction)
+                
             
-            elif self.ram_read(self.pc) == 0b01000111:
+            # PRN
+            elif instruction == 0b01000111:
                 """
                 `PRN register` pseudo-instruction
                 Print numeric value stored in the given register.
@@ -98,9 +139,10 @@ class CPU:
                 register_num = self.ram_read(self.pc + 1)
                 
                 print(self.reg[register_num])
-                self.pc += 2
+                self.pc += self.pc_increment(instruction)
 
-            elif self.ram[self.pc] == 0b00000001:
+            # HLT
+            elif instruction == 0b00000001:
                 """
                 `HLT`
                 Halt the CPU (and exit the emulator).
@@ -108,12 +150,56 @@ class CPU:
                 [command] = 0b00000001
                 """
                 running = False
+            
+            ### Arithmetic Operations
+            # ADD
+            elif instruction == 0b10100000:
+                pass
+            
+            # MUL
+            elif instruction == 0b10100010:
+                """
+                `MUL registerA registerB`
+                Multiply the values in two registers together and store the result in registerA.
+
+                [command] = 0b10100010
+                [register number A]
+                [register number A]
+                """
+                register_num_A = self.ram_read(self.pc + 1)
+                register_num_B = self.ram_read(self.pc + 2)
+                product = self.alu('MUL', register_num_A, register_num_B)
                 
+                self.reg[register_num_A] = product
+                self.pc += self.pc_increment(instruction)
+            
+            # SUB
+            elif instruction == 0b10100001:
+                """
+                `SUB registerA registerB`
+
+                Subtract the value in the second register from the first, storing the
+                result in registerA.
+
+                Machine code:
+                ```
+                10100001 00000aaa 00000bbb
+                """
+                pass
+            
+            # DIV
+            elif instruction == 10100011:
+                """
+                `DIV registerA registerB`
+                Divide the value in the first register by the value in the second,
+                storing the result in registerA.
+                If the value in the second register is 0, the system should print an
+                error message and halt.
+
+                Machine code:
+                ```
+                10100011 00000aaa 00000bbb
+                """
+                pass
 
         
-
-    def ram_read(self, address):
-        return self.ram[address]
-
-    def ram_write(self, address, value):
-        self.ram[address] = value
