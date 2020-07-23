@@ -5,11 +5,15 @@ import sys
 class CPU:
     """Main CPU class."""
 
-    def __init__(self, reg = [0] * 8, pc = 0):
+    def __init__(self):#, reg = [0] * 8, pc = 0, sp = None):
         """Construct a new CPU."""
-        self.reg = reg # register
-        self.ram = [0] * 256 # RAM
-        self.pc = pc # program counter
+        self.reg = [0] * 8      # General Purpose Registers
+        self.ram = [0] * 256    # RAM
+        self.sp = self.reg[7]  # Stack Pointer
+        
+        # Internal Registers
+        self.pc = 0             # Program Counter
+        self.ir = 0b00000001    # Instruction register (defaults to halt)
 
     def load(self):
         """Load a program into memory."""
@@ -22,7 +26,7 @@ class CPU:
             sys.exit(1)
 
         # Load file and write contents to memory (self.ram)
-        program_file = sys.argv[1]
+        program_file = 'examples/' + sys.argv[1] + '.ls8'
         try:
             with open(program_file) as f:
                 for line in f:
@@ -103,11 +107,14 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
+        
+        self.reg[7] = 0xF4
         # After loading a program, we want to run it.
         running = True
         
         while running == True:
             instruction = self.ram_read(self.pc)
+            self.ir = instruction
             
             # LDI 
             if instruction == 0b10000010:
@@ -151,6 +158,50 @@ class CPU:
                 """
                 running = False
             
+            ### Stack Operations
+            # PUSH
+            elif instruction == 0b01000101:
+                """
+                `PUSH`
+                Push the value in the given register on the stack.
+                1. Decrement the `SP`.
+                2. Copy the value in the given register to the address pointed to by `SP`.
+
+                [command] = 01000101
+                [register number]
+                """
+                # Step 1
+                self.sp -= 1
+
+                # Step 2
+                register_num = self.ram_read(self.pc + 1)
+                value = self.reg[register_num]
+                self.ram_write(self.sp, value)
+                
+                self.pc += self.pc_increment(instruction)
+            
+            # POP
+            elif instruction == 0b01000110:
+                """
+                `POP register`
+                Pop the value at the top of the stack into the given register.
+                1. Copy the value from the address pointed to by `SP` to the given register.
+                2. Increment `SP`.
+
+                [command] = 01000110
+                [register number]
+                """
+                # Step 1
+                value = self.ram_read(self.sp)
+
+                register_num = self.ram_read(self.pc + 1)
+                self.reg[register_num] = value
+                
+                # Step 2
+                self.sp += 1
+
+                self.pc += self.pc_increment(instruction)
+
             ### Arithmetic Operations
             # ADD
             elif instruction == 0b10100000:
