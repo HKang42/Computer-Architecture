@@ -50,7 +50,7 @@ class CPU:
         """ALU operations."""
 
         if op == "ADD":
-            self.reg[reg_a] += self.reg[reg_b]
+            return self.reg[reg_a] + self.reg[reg_b]
         #elif op == "SUB": etc
 
         elif op == 'MUL':
@@ -105,6 +105,7 @@ class CPU:
         # Add one to account for the instruction itself
         return operands + 0b1
 
+
     def run(self):
         """Run the CPU."""
         
@@ -133,7 +134,7 @@ class CPU:
                 self.reg[register_num] = value
                 self.pc += self.pc_increment(instruction)
                 
-            
+
             # PRN
             elif instruction == 0b01000111:
                 """
@@ -202,10 +203,70 @@ class CPU:
 
                 self.pc += self.pc_increment(instruction)
 
+
+            ### Subroutines
+            # CALL
+            elif instruction == 0b01010000:
+                """
+                `CALL register`
+
+                Calls a subroutine (function) at the address stored in the register.
+
+                1. The address of the ***instruction*** _directly after_ `CALL` is
+                pushed onto the stack. This allows us to return to where we left off when the subroutine finishes executing.
+                2. The PC is set to the address stored in the given register. We jump to that location in RAM and execute the first instruction 
+                in the subroutine. The PC can move forward or backwards from its current location.
+
+                [command] = 01010000
+                [register number]
+                """
+                # Get address of next instruction
+                return_address = self.pc + 2 
+                
+                # Push address onto memory stack
+                self.sp -= 1
+                self.ram_write(self.sp, return_address)
+
+
+                # Get the address for our subroutine from the given register 
+                # and re-assign PC to it
+                register_num = self.ram_read(self.pc + 1)
+                subroutine_PC = self.reg[register_num]
+                self.pc = subroutine_PC
+
+                
+            # RET
+            elif instruction == 0b00010001:
+                """
+                `RET`
+                Return from subroutine.
+                Pop the value from the top of the stack and store it in the `PC`.
+                """
+                # Pop the PC address we want to return to from the stack
+                return_address = self.ram_read(self.sp)
+                self.sp += 1
+                
+                # Re-assgin pc
+                self.pc = return_address
+
+
             ### Arithmetic Operations
             # ADD
             elif instruction == 0b10100000:
-                pass
+                """
+                `ADD registerA registerB`
+                Add the value in two registers and store the result in registerA.
+
+                [command] = 10100000
+                [register A]
+                [Register B]
+                """
+                register_num_A = self.ram_read(self.pc + 1)
+                register_num_B = self.ram_read(self.pc + 2)
+                product = self.alu('ADD', register_num_A, register_num_B)
+                
+                self.reg[register_num_A] = product
+                self.pc += self.pc_increment(instruction)
             
             # MUL
             elif instruction == 0b10100010:
@@ -252,5 +313,3 @@ class CPU:
                 10100011 00000aaa 00000bbb
                 """
                 pass
-
-        
